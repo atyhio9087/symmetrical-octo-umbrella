@@ -1,7 +1,8 @@
 import React from "react";
-import { Database, RefreshCw, Eye, X, AlertTriangle, Loader2 } from "lucide-react";
+import { Database, RefreshCw, Eye, AlertTriangle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { ProjectRow } from "../types";
+import { ConfigModal } from "./PromptConfigPanel";
 
 interface KnowledgeBaseProps {
   projects: ProjectRow[];
@@ -82,52 +83,13 @@ export default function KnowledgeBase({ projects, isLoading, loadError, builtAt,
       )}
 
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setShowPreviewModal(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-3xl overflow-hidden relative z-10 flex flex-col max-h-[75vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <Database className="w-4 h-4 text-[#0284c7]" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Knowledge Base Preview (First 5 Rows)</h4>
-              </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto bg-slate-50/50">
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200">
-                      <th className="px-3 py-2 w-12">S.No</th>
-                      <th className="px-3 py-2">Deliverable Name</th>
-                      <th className="px-3 py-2">Business Area</th>
-                      <th className="px-3 py-2">Client</th>
-                      <th className="px-3 py-2 text-right">Value (Impact)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
-                    {projects.slice(0, 5).map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="px-3 py-2.5 font-mono text-slate-400">{p.sNo || "-"}</td>
-                        <td className="px-3 py-2.5 font-bold text-slate-900">{p.deliverableName}</td>
-                        <td className="px-3 py-2.5 text-[#0284c7] font-medium">{p.businessArea}</td>
-                        <td className="px-3 py-2.5 text-slate-600">{p.client}</td>
-                        <td className="px-3 py-2.5 text-right font-mono font-bold text-[#0284c7]">{p.valueImpact}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
+        <ConfigModal
+          icon={<Database className="w-4 h-4 text-[#0284c7]" />}
+          title="Knowledge Base Preview (First 5 Rows)"
+          maxWidthClass="max-w-3xl"
+          maxHeightClass="max-h-[75vh]"
+          onClose={() => setShowPreviewModal(false)}
+          footer={
             <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex justify-between items-center text-[9px] text-slate-500">
               <span>Showing {Math.min(5, projects.length)} of {projects.length} rows loaded.</span>
               <button
@@ -137,8 +99,35 @@ export default function KnowledgeBase({ projects, isLoading, loadError, builtAt,
                 Close Preview
               </button>
             </div>
+          }
+        >
+          <div className="p-4 overflow-y-auto bg-slate-50/50">
+            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200">
+                    <th className="px-3 py-2 w-12">S.No</th>
+                    <th className="px-3 py-2">Deliverable Name</th>
+                    <th className="px-3 py-2">Business Area</th>
+                    <th className="px-3 py-2">Client</th>
+                    <th className="px-3 py-2 text-right">Value (Impact)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
+                  {projects.slice(0, 5).map((p) => (
+                    <tr key={p.id} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-3 py-2.5 font-mono text-slate-400">{p.sNo || "-"}</td>
+                      <td className="px-3 py-2.5 font-bold text-slate-900">{p.deliverableName}</td>
+                      <td className="px-3 py-2.5 text-[#0284c7] font-medium">{p.businessArea}</td>
+                      <td className="px-3 py-2.5 text-slate-600">{p.client}</td>
+                      <td className="px-3 py-2.5 text-right font-mono font-bold text-[#0284c7]">{p.valueImpact}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </ConfigModal>
       )}
     </div>
   );

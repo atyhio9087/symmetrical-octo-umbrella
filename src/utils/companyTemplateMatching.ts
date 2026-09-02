@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { CompanyTemplateRow } from "../types";
+import { makeFuzzyRowLookup } from "./fuzzyHeaderLookup";
 
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -37,14 +39,7 @@ export function findGenericTemplate(templates: CompanyTemplateRow[]): CompanyTem
  * Template value, since both are required for a row to be usable.
  */
 export function normalizeCompanyTemplateRow(rawRow: Record<string, any>, id: string): CompanyTemplateRow | null {
-  const findValue = (keys: string[]) => {
-    const rawKeys = Object.keys(rawRow);
-    const matchedKey = rawKeys.find(rk => {
-      const normalizedRk = rk.toLowerCase().replace(/[^a-z0-9]/g, "");
-      return keys.some(k => normalizedRk.includes(k.toLowerCase().replace(/[^a-z0-9]/g, "")));
-    });
-    return matchedKey ? rawRow[matchedKey] : undefined;
-  };
+  const findValue = makeFuzzyRowLookup(rawRow);
 
   const company = String(findValue(["company"]) || "").trim();
   const template = String(findValue(["template", "format", "emailformat", "emailtemplate"]) || "").trim();
@@ -58,4 +53,44 @@ export function normalizeCompanyTemplateRow(rawRow: Record<string, any>, id: str
     template,
     raw: rawRow
   };
+}
+
+/**
+ * Resolves which company template (if any) applies for a single, non-interactive row — batch
+ * pipelines (BatchWorkflow, FollowUpWorkflow's batch mode) have no per-row UI to disambiguate
+ * multiple department-specific formats for the same company, so an ambiguous match (2+ rows) falls
+ * back to the library's "generic" row rather than guessing which one applies. Shared so both batch
+ * pipelines resolve a row's template identically.
+ */
+export function resolveBatchCompanyTemplate(templates: CompanyTemplateRow[], company: string): string | undefined {
+  const matches = matchCompanyTemplates(templates, company || "");
+  if (matches.length === 1) return matches[0].template;
+  if (matches.length === 0) return findGenericTemplate(templates)?.template;
+  return undefined;
+}
+
+/**
+ * Live-resolves which company template applies as `company` changes, for the interactive
+ * single-stakeholder forms (SingleStakeholderWorkflow, FollowUpWorkflow's single mode) — these do
+ * have UI to let the user pick between multiple department-specific matches for the same company,
+ * so unlike resolveBatchCompanyTemplate this exposes the raw match list plus a selection setter.
+ */
+export function useResolvedCompanyTemplate(templates: CompanyTemplateRow[], company: string) {
+  const [matches, setMatches] = useState<CompanyTemplateRow[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setMatches(matchCompanyTemplates(templates, company));
+    setSelectedId(null);
+  }, [company, templates]);
+
+  const genericTemplate = findGenericTemplate(templates);
+  const activeTemplate =
+    matches.length === 1
+      ? matches[0].template
+      : matches.length > 1
+        ? matches.find(m => m.id === selectedId)?.template
+        : genericTemplate?.template;
+
+  return { matches, selectedId, setSelectedId, genericTemplate, activeTemplate };
 }

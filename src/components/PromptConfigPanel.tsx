@@ -13,6 +13,60 @@ interface FewShotExamplesPanelProps {
   onChange: (newConfig: PromptConfig) => void;
 }
 
+interface ConfigModalProps {
+  icon: React.ReactNode;
+  title: string;
+  maxWidthClass?: string;
+  maxHeightClass?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  // Defaults to a single right-aligned "Save & Close" button. Pass a custom footer (e.g. a
+  // left-aligned row count plus a "Close Preview" button) for read-only preview modals.
+  footer?: React.ReactNode;
+}
+
+// Shared modal chrome (backdrop, header with icon/title/close, footer) for every "popup over the
+// app" in this codebase: the editable "Configure System Instructions" / "Configure Few-Shot
+// Examples" popups below (reused as-is by FollowUpWorkflow's own copies of the same editors), and
+// the read-only "Preview" modals in KnowledgeBase / CompanyTemplateLibrary via a custom `footer`.
+export function ConfigModal({ icon, title, maxWidthClass = "max-w-2xl", maxHeightClass = "max-h-[85vh]", onClose, children, footer }: ConfigModalProps) {
+  return (
+    <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
+      <div
+        className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
+        onClick={onClose}
+      />
+      <div className={`bg-white rounded-xl border border-slate-300 shadow-xl w-full ${maxWidthClass} overflow-hidden relative z-10 flex flex-col ${maxHeightClass}`}>
+        <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center space-x-2">
+            {icon}
+            <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">{title}</h4>
+          </div>
+          <button
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {children}
+
+        {footer ?? (
+          <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-[#0284c7] hover:bg-[#025a87] text-white text-xs font-bold rounded-lg shadow-sm transition-all btn-animate"
+            >
+              Save &amp; Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function SystemInstructionsPanel({ config, onChange, onReset }: SystemInstructionsPanelProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,45 +139,22 @@ export function SystemInstructionsPanel({ config, onChange, onReset }: SystemIns
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-2xl overflow-hidden relative z-10 flex flex-col max-h-[80vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <Sliders className="w-4 h-4 text-[#0284c7]" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Configure System Instructions</h4>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="p-4 overflow-y-auto flex-grow flex flex-col space-y-3">
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Global System Instructions</label>
-              <textarea
-                value={config.systemInstructions}
-                onChange={handleInstructionsChange}
-                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                placeholder="Provide system directives to shape the AI's writing style..."
-              />
-            </div>
-            
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 bg-[#0284c7] hover:bg-[#025a87] text-white text-xs font-bold rounded-lg shadow-sm transition-all btn-animate"
-              >
-                Save &amp; Close
-              </button>
-            </div>
+        <ConfigModal
+          icon={<Sliders className="w-4 h-4 text-[#0284c7]" />}
+          title="Configure System Instructions"
+          maxWidthClass="max-w-2xl"
+          onClose={() => setIsModalOpen(false)}
+        >
+          <div className="p-4 overflow-y-auto flex-grow flex flex-col space-y-3">
+            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Global System Instructions</label>
+            <textarea
+              value={config.systemInstructions}
+              onChange={handleInstructionsChange}
+              className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+              placeholder="Provide system directives to shape the AI's writing style..."
+            />
           </div>
-        </div>
+        </ConfigModal>
       )}
     </div>
   );
@@ -237,54 +268,31 @@ export function FewShotExamplesPanel({ config, onChange }: FewShotExamplesPanelP
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-4xl overflow-hidden relative z-10 flex flex-col max-h-[85vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-[#0284c7]" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Configure Few-Shot Examples</h4>
-              </div>
-              <button 
-                onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        <ConfigModal
+          icon={<Layers className="w-4 h-4 text-[#0284c7]" />}
+          title="Configure Few-Shot Examples"
+          maxWidthClass="max-w-4xl"
+          onClose={() => setIsModalOpen(false)}
+        >
+          <div className="p-4 overflow-y-auto flex-grow grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 flex flex-col">
+              <textarea
+                value={config.fewShotExamples[0] || ""}
+                onChange={(e) => handleFewShotChange(0, e.target.value)}
+                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+                placeholder="Enter sample blurb #1..."
+              />
             </div>
-            
-            <div className="p-4 overflow-y-auto flex-grow grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 flex flex-col">
-                <textarea
-                  value={config.fewShotExamples[0] || ""}
-                  onChange={(e) => handleFewShotChange(0, e.target.value)}
-                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                  placeholder="Enter sample blurb #1..."
-                />
-              </div>
-              <div className="space-y-2 flex flex-col">
-                <textarea
-                  value={config.fewShotExamples[1] || ""}
-                  onChange={(e) => handleFewShotChange(1, e.target.value)}
-                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                  placeholder="Enter sample blurb #2..."
-                />
-              </div>
-            </div>
-            
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="px-4 py-2 bg-[#0284c7] hover:bg-[#025a87] text-white text-xs font-bold rounded-lg shadow-sm transition-all btn-animate"
-              >
-                Save &amp; Close
-              </button>
+            <div className="space-y-2 flex flex-col">
+              <textarea
+                value={config.fewShotExamples[1] || ""}
+                onChange={(e) => handleFewShotChange(1, e.target.value)}
+                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+                placeholder="Enter sample blurb #2..."
+              />
             </div>
           </div>
-        </div>
+        </ConfigModal>
       )}
     </div>
   );

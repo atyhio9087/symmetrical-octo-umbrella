@@ -14,7 +14,7 @@ import {
   User,
   Linkedin
 } from "lucide-react";
-import { ProjectRow, PromptConfig, CompanyTemplateRow } from "./types";
+import { ProjectRow, PromptConfig, CompanyTemplateRow, OutreachStakeholderPayload, OutreachResult } from "./types";
 import KnowledgeBase from "./components/KnowledgeBase";
 import CompanyTemplateLibrary from "./components/CompanyTemplateLibrary";
 import SenderIdentityPanel from "./components/SenderIdentityPanel";
@@ -80,24 +80,7 @@ const OUTREACH_PRESETS: Record<string, PromptConfig> = {
   }
 };
 
-interface StakeholderPayload {
-  name: string;
-  designation: string;
-  areaOfFocus: string;
-  company?: string;
-  companyIntelligence?: string;
-  linkedinUrl?: string;
-  previousEmail?: string;
-  companyTemplate?: string;
-  senderName?: string;
-  senderPosition?: string;
-}
-
-interface OutreachResult {
-  text: string;
-  linkedinText: string;
-  referencedProjectIds: string[];
-}
+type StakeholderPayload = OutreachStakeholderPayload;
 
 // Shared POST + error-handling + response-shaping logic for the /api/generate and /api/refine
 // proxy calls below, which otherwise differ only in endpoint, request body, and error fallback text.

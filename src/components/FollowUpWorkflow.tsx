@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import * as XLSX from "xlsx";
 import { 
   User, 
@@ -26,12 +26,15 @@ import {
   FileText,
   Play
 } from "lucide-react";
-import { ProjectRow, PromptConfig, CompanyTemplateRow } from "../types";
+import { ProjectRow, PromptConfig, CompanyTemplateRow, OutreachStakeholderPayload, OutreachResult } from "../types";
 import { matchProjects, matchProjectsAsync } from "../utils/matchingEngine";
-import { matchCompanyTemplates, findGenericTemplate } from "../utils/companyTemplateMatching";
-import { parseCSV } from "../utils/csvParser";
+import { useResolvedCompanyTemplate, resolveBatchCompanyTemplate } from "../utils/companyTemplateMatching";
+import { parseTabularFile } from "../utils/fileParsing";
+import { QUICK_FEEDBACKS } from "../utils/quickFeedback";
+import { useFileDropzone } from "../utils/useFileDropzone";
 import PresetToggle from "./PresetToggle";
 import CompanyTemplateSelector from "./CompanyTemplateSelector";
+import { ConfigModal } from "./PromptConfigPanel";
 
 interface FollowUpWorkflowProps {
   projects: ProjectRow[];
@@ -39,41 +42,19 @@ interface FollowUpWorkflowProps {
   senderName?: string;
   senderPosition?: string;
   onGenerate: (
-    stakeholder: {
-      name: string;
-      designation: string;
-      areaOfFocus: string;
-      company?: string;
-      companyIntelligence?: string;
-      linkedinUrl?: string;
-      previousEmail?: string;
-      companyTemplate?: string;
-      senderName?: string;
-      senderPosition?: string;
-    },
+    stakeholder: OutreachStakeholderPayload,
     matchedProjects: ProjectRow[],
     customSystemInstructions?: string,
     customFewShotExamples?: string[]
-  ) => Promise<{ text: string; linkedinText: string; referencedProjectIds: string[] }>;
+  ) => Promise<OutreachResult>;
   onRefine: (
-    stakeholder: {
-      name: string;
-      designation: string;
-      areaOfFocus: string;
-      company?: string;
-      companyIntelligence?: string;
-      linkedinUrl?: string;
-      previousEmail?: string;
-      companyTemplate?: string;
-      senderName?: string;
-      senderPosition?: string;
-    },
+    stakeholder: OutreachStakeholderPayload,
     originalBlurb: string,
     feedback: string,
     matchedProjects: ProjectRow[],
     customSystemInstructions?: string,
     customFewShotExamples?: string[]
-  ) => Promise<{ text: string; linkedinText: string; referencedProjectIds: string[] }>;
+  ) => Promise<OutreachResult>;
 }
 
 // Shared few-shot examples for follow-up emails, reused across all 4 relationship/familiarity
@@ -128,13 +109,6 @@ const FOLLOWUP_PRESETS: Record<string, PromptConfig> = {
   }
 };
 
-const QUICK_FEEDBACKS = [
-  { label: "Polish ✨", text: "Please polish the writing and style of the email." },
-  { label: "Formalize 👔", text: "Make the email more formal and professional." },
-  { label: "Add Use Case +", text: "Add one more relevant case study or project metric from our track record to the email." },
-  { label: "Remove Use Case -", text: "Remove one case study or project metric reference from the email to make it more focused." }
-];
-
 interface BatchRecord {
   id: number;
   name: string;
@@ -171,10 +145,6 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
   const [company, setCompany] = useState("");
   const [previousEmail, setPreviousEmail] = useState("");
 
-  // Company email-format matching
-  const [companyTemplateMatches, setCompanyTemplateMatches] = useState<CompanyTemplateRow[]>([]);
-  const [selectedCompanyTemplateId, setSelectedCompanyTemplateId] = useState<string | null>(null);
-
   // UI States
   const [matched, setMatched] = useState<ProjectRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -190,8 +160,6 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
   const [history, setHistory] = useState<{ feedback: string; blurb: string; linkedinText: string }[]>([]);
 
   // Batch states
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [records, setRecords] = useState<BatchRecord[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [batchSuccess, setBatchSuccess] = useState<string | null>(null);
@@ -240,20 +208,13 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
   }, [projects, designation, areaOfFocus, company]);
 
   // Resolve which company email format (if any) applies as the company field changes
-  useEffect(() => {
-    const matches = matchCompanyTemplates(companyTemplates, company);
-    setCompanyTemplateMatches(matches);
-    setSelectedCompanyTemplateId(null);
-  }, [company, companyTemplates]);
-
-  const genericCompanyTemplate = findGenericTemplate(companyTemplates);
-
-  const activeCompanyTemplate =
-    companyTemplateMatches.length === 1
-      ? companyTemplateMatches[0].template
-      : companyTemplateMatches.length > 1
-        ? companyTemplateMatches.find(m => m.id === selectedCompanyTemplateId)?.template
-        : genericCompanyTemplate?.template;
+  const {
+    matches: companyTemplateMatches,
+    selectedId: selectedCompanyTemplateId,
+    setSelectedId: setSelectedCompanyTemplateId,
+    genericTemplate: genericCompanyTemplate,
+    activeTemplate: activeCompanyTemplate
+  } = useResolvedCompanyTemplate(companyTemplates, company);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -339,30 +300,7 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
   };
 
   // Drag and Drop helpers
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      parseBatchFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      parseBatchFile(e.target.files[0]);
-    }
-  };
+  const { fileInputRef, dragActive, handleDrag, handleDrop, handleFileChange } = useFileDropzone((file) => parseBatchFile(file));
 
   const handleCopy = () => {
     if (!generatedBlurb) return;
@@ -379,10 +317,9 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
   };
 
   // Batch Execution Parsers
-  const parseBatchFile = (file: File) => {
+  const parseBatchFile = async (file: File) => {
     setBatchError(null);
     setBatchSuccess(null);
-    const reader = new FileReader();
 
     const processJson = (jsonData: any[]) => {
       if (jsonData.length === 0) {
@@ -427,23 +364,11 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
       }
     };
 
-    if (file.name.endsWith(".csv")) {
-      reader.onload = (e) => {
-        try {
-          processJson(parseCSV(e.target?.result as string));
-        } catch (e: any) { setBatchError(e.message); }
-      };
-      reader.readAsText(file);
-    } else {
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const wb = XLSX.read(data, { type: "array" });
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-          processJson(rows);
-        } catch (e: any) { setBatchError(e.message); }
-      };
-      reader.readAsArrayBuffer(file);
+    try {
+      const { rows } = await parseTabularFile(file);
+      processJson(rows);
+    } catch (err: any) {
+      setBatchError(err.message || "Failed to read the file.");
     }
   };
 
@@ -463,15 +388,7 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
         const topMatches = await matchProjectsAsync(projects, finalDesignation, finalAreaOfFocus, finalCompany, "", 5);
         setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: "generating", matchedCaseStudies: topMatches } : r));
 
-        // Only auto-apply when unambiguous — batch mode has no per-row UI to pick between
-        // multiple department-specific formats for the same company. Falls back to the
-        // library's "generic" row (if any) when there's no company-specific match at all.
-        const templateMatches = matchCompanyTemplates(companyTemplates, finalCompany || "");
-        const companyTemplate = templateMatches.length === 1
-          ? templateMatches[0].template
-          : templateMatches.length === 0
-            ? findGenericTemplate(companyTemplates)?.template
-            : undefined;
+        const companyTemplate = resolveBatchCompanyTemplate(companyTemplates, finalCompany || "");
 
         const result = await onGenerate({
           name: record.name,
@@ -1193,105 +1110,59 @@ export default function FollowUpWorkflow({ projects, companyTemplates, senderNam
 
       {/* Modal Popup for editing Follow-Up System Instructions */}
       {isSysPromptModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsSysPromptModalOpen(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-2xl overflow-hidden relative z-10 flex flex-col max-h-[80vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <Sliders className="w-4 h-4 text-[#0284c7]" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Configure System Instructions</h4>
-              </div>
-              <button 
-                onClick={() => setIsSysPromptModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-            
-            <div className="p-4 overflow-y-auto flex-grow flex flex-col space-y-3">
-              <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Global System Instructions</label>
-              <textarea
-                value={promptConfig.systemInstructions}
-                onChange={(e) => setPromptConfig({ ...promptConfig, systemInstructions: e.target.value })}
-                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                placeholder="Provide system directives to shape the AI's writing style..."
-              />
-            </div>
-            
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setIsSysPromptModalOpen(false)}
-                className="px-4 py-2 bg-[#0284c7] hover:bg-[#025a87] text-white text-xs font-bold rounded-lg shadow-sm transition-all btn-animate"
-              >
-                Save &amp; Close
-              </button>
-            </div>
+        <ConfigModal
+          icon={<Sliders className="w-4 h-4 text-[#0284c7]" />}
+          title="Configure System Instructions"
+          maxWidthClass="max-w-2xl"
+          onClose={() => setIsSysPromptModalOpen(false)}
+        >
+          <div className="p-4 overflow-y-auto flex-grow flex flex-col space-y-3">
+            <label className="block text-[10px] font-bold text-slate-700 uppercase tracking-wider">Global System Instructions</label>
+            <textarea
+              value={promptConfig.systemInstructions}
+              onChange={(e) => setPromptConfig({ ...promptConfig, systemInstructions: e.target.value })}
+              className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+              placeholder="Provide system directives to shape the AI's writing style..."
+            />
           </div>
-        </div>
+        </ConfigModal>
       )}
 
       {/* Modal Popup for editing Follow-Up Few-Shot Examples */}
       {isFewShotModalOpen && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div 
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsFewShotModalOpen(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-4xl overflow-hidden relative z-10 flex flex-col max-h-[85vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <Layers className="w-4 h-4 text-[#0284c7]" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Configure Few-Shot Examples</h4>
-              </div>
-              <button 
-                onClick={() => setIsFewShotModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
+        <ConfigModal
+          icon={<Layers className="w-4 h-4 text-[#0284c7]" />}
+          title="Configure Few-Shot Examples"
+          maxWidthClass="max-w-4xl"
+          onClose={() => setIsFewShotModalOpen(false)}
+        >
+          <div className="p-4 overflow-y-auto flex-grow grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2 flex flex-col">
+              <textarea
+                value={promptConfig.fewShotExamples[0] || ""}
+                onChange={(e) => {
+                  const updated = [...promptConfig.fewShotExamples];
+                  updated[0] = e.target.value;
+                  setPromptConfig({ ...promptConfig, fewShotExamples: updated });
+                }}
+                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+                placeholder="Enter sample blurb #1..."
+              />
             </div>
-            
-            <div className="p-4 overflow-y-auto flex-grow grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 flex flex-col">
-                <textarea
-                  value={promptConfig.fewShotExamples[0] || ""}
-                  onChange={(e) => {
-                    const updated = [...promptConfig.fewShotExamples];
-                    updated[0] = e.target.value;
-                    setPromptConfig({ ...promptConfig, fewShotExamples: updated });
-                  }}
-                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                  placeholder="Enter sample blurb #1..."
-                />
-              </div>
-              <div className="space-y-2 flex flex-col">
-                <textarea
-                  value={promptConfig.fewShotExamples[1] || ""}
-                  onChange={(e) => {
-                    const updated = [...promptConfig.fewShotExamples];
-                    updated[1] = e.target.value;
-                    setPromptConfig({ ...promptConfig, fewShotExamples: updated });
-                  }}
-                  className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
-                  placeholder="Enter sample blurb #2..."
-                />
-              </div>
-            </div>
-            
-            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
-              <button
-                onClick={() => setIsFewShotModalOpen(false)}
-                className="px-4 py-2 bg-[#0284c7] hover:bg-[#025a87] text-white text-xs font-bold rounded-lg shadow-sm transition-all btn-animate"
-              >
-                Save &amp; Close
-              </button>
+            <div className="space-y-2 flex flex-col">
+              <textarea
+                value={promptConfig.fewShotExamples[1] || ""}
+                onChange={(e) => {
+                  const updated = [...promptConfig.fewShotExamples];
+                  updated[1] = e.target.value;
+                  setPromptConfig({ ...promptConfig, fewShotExamples: updated });
+                }}
+                className="w-full px-3 py-2 text-xs text-slate-800 bg-white border border-slate-300 rounded-lg focus:ring-2 focus:ring-[#0284c7] focus:outline-none placeholder-slate-400 font-mono leading-relaxed resize-none flex-grow min-h-[300px]"
+                placeholder="Enter sample blurb #2..."
+              />
             </div>
           </div>
-        </div>
+        </ConfigModal>
       )}
     </div>
   );

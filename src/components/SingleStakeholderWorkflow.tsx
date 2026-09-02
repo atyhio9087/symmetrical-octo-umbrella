@@ -17,9 +17,10 @@ import {
   Eye,
   Linkedin
 } from "lucide-react";
-import { ProjectRow, PromptConfig, CompanyTemplateRow } from "../types";
+import { ProjectRow, PromptConfig, CompanyTemplateRow, OutreachStakeholderPayload, OutreachResult } from "../types";
 import { matchProjects, matchProjectsAsync } from "../utils/matchingEngine";
-import { matchCompanyTemplates, findGenericTemplate } from "../utils/companyTemplateMatching";
+import { useResolvedCompanyTemplate } from "../utils/companyTemplateMatching";
+import { QUICK_FEEDBACKS } from "../utils/quickFeedback";
 import CompanyTemplateSelector from "./CompanyTemplateSelector";
 
 interface SingleStakeholderWorkflowProps {
@@ -29,44 +30,17 @@ interface SingleStakeholderWorkflowProps {
   senderName?: string;
   senderPosition?: string;
   onGenerate: (
-    stakeholder: {
-      name: string;
-      designation: string;
-      areaOfFocus: string;
-      company?: string;
-      companyIntelligence?: string;
-      linkedinUrl?: string;
-      companyTemplate?: string;
-      senderName?: string;
-      senderPosition?: string;
-    },
+    stakeholder: OutreachStakeholderPayload,
     matchedProjects: ProjectRow[]
-  ) => Promise<{ text: string; linkedinText: string; referencedProjectIds: string[] }>;
+  ) => Promise<OutreachResult>;
   onRefine: (
-    stakeholder: {
-      name: string;
-      designation: string;
-      areaOfFocus: string;
-      company?: string;
-      companyIntelligence?: string;
-      linkedinUrl?: string;
-      companyTemplate?: string;
-      senderName?: string;
-      senderPosition?: string;
-    },
+    stakeholder: OutreachStakeholderPayload,
     originalBlurb: string,
     feedback: string,
     matchedProjects: ProjectRow[]
-  ) => Promise<{ text: string; linkedinText: string; referencedProjectIds: string[] }>;
+  ) => Promise<OutreachResult>;
   researchMode: "manual" | "linkedin";
 }
-
-const QUICK_FEEDBACKS = [
-  { label: "Polish ✨", text: "Please polish the writing and style of the email." },
-  { label: "Formalize 👔", text: "Make the email more formal and professional." },
-  { label: "Add Use Case +", text: "Add one more relevant case study or project metric from our track record to the email." },
-  { label: "Remove Use Case -", text: "Remove one case study or project metric reference from the email to make it more focused." }
-];
 
 export default function SingleStakeholderWorkflow({
   projects,
@@ -85,10 +59,6 @@ export default function SingleStakeholderWorkflow({
   const [company, setCompany] = useState("");
   const [linkedinUrl, setLinkedinUrl] = useState("");
   const [companyIntelligence, setCompanyIntelligence] = useState("");
-
-  // Company email-format matching
-  const [companyTemplateMatches, setCompanyTemplateMatches] = useState<CompanyTemplateRow[]>([]);
-  const [selectedCompanyTemplateId, setSelectedCompanyTemplateId] = useState<string | null>(null);
 
   // Search Agent State
   const [isResearching, setIsResearching] = useState(false);
@@ -143,20 +113,13 @@ export default function SingleStakeholderWorkflow({
   }, [projects, designation, areaOfFocus, companyIntelligence, company]);
 
   // Resolve which company email format (if any) applies as the company field changes
-  useEffect(() => {
-    const matches = matchCompanyTemplates(companyTemplates, company);
-    setCompanyTemplateMatches(matches);
-    setSelectedCompanyTemplateId(null);
-  }, [company, companyTemplates]);
-
-  const genericCompanyTemplate = findGenericTemplate(companyTemplates);
-
-  const activeCompanyTemplate =
-    companyTemplateMatches.length === 1
-      ? companyTemplateMatches[0].template
-      : companyTemplateMatches.length > 1
-        ? companyTemplateMatches.find(m => m.id === selectedCompanyTemplateId)?.template
-        : genericCompanyTemplate?.template;
+  const {
+    matches: companyTemplateMatches,
+    selectedId: selectedCompanyTemplateId,
+    setSelectedId: setSelectedCompanyTemplateId,
+    genericTemplate: genericCompanyTemplate,
+    activeTemplate: activeCompanyTemplate
+  } = useResolvedCompanyTemplate(companyTemplates, company);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();

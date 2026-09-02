@@ -1,4 +1,5 @@
 import { ProjectRow } from "../types";
+import { makeFuzzyRowLookup } from "./fuzzyHeaderLookup";
 
 /**
  * Normalizes one raw row (from CSV, Excel, or a Google Sheet) into a ProjectRow, matching column
@@ -6,14 +7,7 @@ import { ProjectRow } from "../types";
  * admin-configured Google Sheet auto-load path, so both produce identical results.
  */
 export function normalizeProjectRow(rawRow: Record<string, any>, id: string): ProjectRow {
-  const findValue = (keys: string[]) => {
-    const rawKeys = Object.keys(rawRow);
-    const matchedKey = rawKeys.find(rk => {
-      const normalizedRk = rk.toLowerCase().replace(/[^a-z0-9]/g, "");
-      return keys.some(k => normalizedRk.includes(k.toLowerCase().replace(/[^a-z0-9]/g, "")));
-    });
-    return matchedKey ? rawRow[matchedKey] : undefined;
-  };
+  const findValue = makeFuzzyRowLookup(rawRow);
 
   const sNo = String(findValue(["sno", "s.no", "serial"]) || "");
   const insightPeriod = String(findValue(["insight period", "period"]) || "");

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import * as XLSX from "xlsx";
 import { 
   Upload, 
@@ -15,10 +15,11 @@ import {
   Database,
   RefreshCw
 } from "lucide-react";
-import { ProjectRow, CompanyTemplateRow } from "../types";
+import { ProjectRow, CompanyTemplateRow, OutreachStakeholderPayload } from "../types";
 import { matchProjects, matchProjectsAsync } from "../utils/matchingEngine";
-import { matchCompanyTemplates, findGenericTemplate } from "../utils/companyTemplateMatching";
-import { parseCSV } from "../utils/csvParser";
+import { resolveBatchCompanyTemplate } from "../utils/companyTemplateMatching";
+import { parseTabularFile } from "../utils/fileParsing";
+import { useFileDropzone } from "../utils/useFileDropzone";
 
 interface BatchWorkflowProps {
   projects: ProjectRow[];
@@ -28,17 +29,7 @@ interface BatchWorkflowProps {
   senderName?: string;
   senderPosition?: string;
   onGenerateSingleRow: (
-    stakeholder: {
-      name: string;
-      designation: string;
-      areaOfFocus: string;
-      company?: string;
-      companyIntelligence?: string;
-      linkedinUrl?: string;
-      companyTemplate?: string;
-      senderName?: string;
-      senderPosition?: string;
-    },
+    stakeholder: OutreachStakeholderPayload,
     matchedProjects: ProjectRow[]
   ) => Promise<{ text: string; linkedinText: string }>;
   researchMode: "manual" | "linkedin";
@@ -68,8 +59,6 @@ export default function BatchWorkflow({
   onGenerateSingleRow,
   researchMode
 }: BatchWorkflowProps) {
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragActive, setDragActive] = useState(false);
   const [records, setRecords] = useState<BatchRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -81,36 +70,11 @@ export default function BatchWorkflow({
   // Selected row preview slideover/modal
   const [activeRow, setActiveRow] = useState<BatchRecord | null>(null);
 
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
-      setDragActive(true);
-    } else if (e.type === "dragleave") {
-      setDragActive(false);
-    }
-  };
+  const { fileInputRef, dragActive, handleDrag, handleDrop, handleFileChange } = useFileDropzone((file) => parseBatchFile(file));
 
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      parseBatchFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      parseBatchFile(e.target.files[0]);
-    }
-  };
-
-  const parseBatchFile = (file: File) => {
+  const parseBatchFile = async (file: File) => {
     setError(null);
     setSuccess(null);
-    const reader = new FileReader();
 
     const processData = (jsonData: any[]) => {
       if (jsonData.length === 0) {
@@ -175,29 +139,11 @@ export default function BatchWorkflow({
       }
     };
 
-    if (file.name.endsWith(".csv")) {
-      reader.onload = (e) => {
-        try {
-          processData(parseCSV(e.target?.result as string));
-        } catch (err: any) {
-          setError(`CSV parse failure: ${err.message}`);
-        }
-      };
-      reader.readAsText(file);
-    } else {
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          const sheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[sheetName];
-          const rawJson = XLSX.utils.sheet_to_json(worksheet);
-          processData(rawJson);
-        } catch (err: any) {
-          setError(`Excel parse failure: ${err.message}`);
-        }
-      };
-      reader.readAsArrayBuffer(file);
+    try {
+      const { rows } = await parseTabularFile(file);
+      processData(rows);
+    } catch (err: any) {
+      setError(err.message || "Failed to read the file.");
     }
   };
 
@@ -258,16 +204,9 @@ export default function BatchWorkflow({
         // Update status to generating
         setRecords(prev => prev.map(r => r.id === record.id ? { ...r, status: "generating", matchedCaseStudies: topMatches } : r));
 
-        // Resolve a company-specific email format if there's exactly one unambiguous match.
-        // Batch mode has no per-row UI to disambiguate multiple department-specific formats for
-        // the same company, so an ambiguous match falls back to the library's "generic" row
-        // (if any) rather than guessing which one applies.
-        const templateMatches = matchCompanyTemplates(companyTemplates, finalCompany || "");
-        const companyTemplate = templateMatches.length === 1
-          ? templateMatches[0].template
-          : templateMatches.length === 0
-            ? findGenericTemplate(companyTemplates)?.template
-            : undefined;
+        // Resolve a company-specific email format if there's exactly one unambiguous match — see
+        // resolveBatchCompanyTemplate() for the disambiguation/fallback rule.
+        const companyTemplate = resolveBatchCompanyTemplate(companyTemplates, finalCompany || "");
 
         // Call LLM synthesis proxy
         const result = await onGenerateSingleRow({

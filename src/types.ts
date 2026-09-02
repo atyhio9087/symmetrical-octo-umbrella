@@ -67,6 +67,29 @@ export interface SingleGenerationState {
   feedbackHistory: { feedback: string; blurb: string }[];
 }
 
+// Shared shape for the stakeholder payload passed to onGenerate/onRefine across all three
+// workflows (Single, Batch, Follow-Up) and proxied straight through to /api/generate and
+// /api/refine — one shared type avoids each workflow re-declaring the same field list (which
+// otherwise duplicates identically for onGenerate vs onRefine within a single workflow too).
+export interface OutreachStakeholderPayload {
+  name: string;
+  designation: string;
+  areaOfFocus: string;
+  company?: string;
+  companyIntelligence?: string;
+  linkedinUrl?: string;
+  previousEmail?: string;
+  companyTemplate?: string;
+  senderName?: string;
+  senderPosition?: string;
+}
+
+export interface OutreachResult {
+  text: string;
+  linkedinText: string;
+  referencedProjectIds: string[];
+}
+
 export interface BatchItem {
   id: string;
   stakeholder: {

@@ -1,5 +1,4 @@
 import React, { useRef, useState } from "react";
-import * as XLSX from "xlsx";
 import {
   FileSpreadsheet,
   Upload,
@@ -7,13 +6,13 @@ import {
   CheckCircle,
   Trash2,
   Eye,
-  X,
   Loader2
 } from "lucide-react";
 import { CompanyTemplateRow } from "../types";
-import { parseCSV } from "../utils/csvParser";
 import { normalizeCompanyTemplateRow } from "../utils/companyTemplateMatching";
 import { saveCompanyTemplatesCsv } from "../utils/serverData";
+import { parseTabularFile } from "../utils/fileParsing";
+import { ConfigModal } from "./PromptConfigPanel";
 
 interface CompanyTemplateLibraryProps {
   templates: CompanyTemplateRow[];
@@ -64,38 +63,14 @@ export default function CompanyTemplateLibrary({ templates, onTemplatesLoaded, o
     }
   };
 
-  const handleFileProcess = (file: File) => {
+  const handleFileProcess = async (file: File) => {
     setErrorMessages([]);
     setSuccessMessage("");
-    const reader = new FileReader();
-
-    if (file.name.endsWith(".csv")) {
-      reader.onload = (e) => {
-        try {
-          const csvText = e.target?.result as string;
-          loadFromRows(parseCSV(csvText), csvText, file.name, file.name);
-        } catch (err: any) {
-          setErrorMessages([`Failed to parse CSV: ${err.message || err}`]);
-        }
-      };
-      reader.readAsText(file);
-    } else {
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const workbook = XLSX.read(data, { type: "array" });
-          if (workbook.SheetNames.length === 0) {
-            setErrorMessages(["The uploaded spreadsheet contains no worksheets."]);
-            return;
-          }
-          const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-          const csvText = XLSX.utils.sheet_to_csv(worksheet);
-          loadFromRows(XLSX.utils.sheet_to_json(worksheet), csvText, file.name, file.name);
-        } catch (err: any) {
-          setErrorMessages([`Failed to parse spreadsheet: ${err.message || err}`]);
-        }
-      };
-      reader.readAsArrayBuffer(file);
+    try {
+      const { rows, csvText } = await parseTabularFile(file);
+      await loadFromRows(rows, csvText, file.name, file.name);
+    } catch (err: any) {
+      setErrorMessages([`Failed to parse "${file.name}": ${err.message || err}`]);
     }
   };
 
@@ -206,50 +181,13 @@ export default function CompanyTemplateLibrary({ templates, onTemplatesLoaded, o
       ))}
 
       {showPreviewModal && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex items-center justify-center p-4 animate-fadeIn">
-          <div
-            className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs transition-opacity"
-            onClick={() => setShowPreviewModal(false)}
-          />
-          <div className="bg-white rounded-xl border border-slate-300 shadow-xl w-full max-w-3xl overflow-hidden relative z-10 flex flex-col max-h-[75vh]">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
-              <div className="flex items-center space-x-2">
-                <FileSpreadsheet className="w-4 h-4 text-violet-600" />
-                <h4 className="text-xs font-bold text-[#0a1128] uppercase tracking-wider">Company Format Library Preview</h4>
-              </div>
-              <button
-                onClick={() => setShowPreviewModal(false)}
-                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 btn-animate"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto bg-slate-50/50">
-              <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200">
-                      <th className="px-3 py-2">Company</th>
-                      <th className="px-3 py-2">Sub-brand</th>
-                      <th className="px-3 py-2">Department</th>
-                      <th className="px-3 py-2">Template Preview</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
-                    {templates.map((t) => (
-                      <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
-                        <td className="px-3 py-2.5 font-bold text-slate-900">{t.company}</td>
-                        <td className="px-3 py-2.5 text-slate-600">{t.subBrand || "-"}</td>
-                        <td className="px-3 py-2.5 text-violet-700 font-medium">{t.department || "-"}</td>
-                        <td className="px-3 py-2.5 text-slate-500 max-w-xs truncate" title={t.template}>{t.template}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
+        <ConfigModal
+          icon={<FileSpreadsheet className="w-4 h-4 text-violet-600" />}
+          title="Company Format Library Preview"
+          maxWidthClass="max-w-3xl"
+          maxHeightClass="max-h-[75vh]"
+          onClose={() => setShowPreviewModal(false)}
+          footer={
             <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex justify-between items-center text-[9px] text-slate-500">
               <span>{templates.length} format{templates.length === 1 ? "" : "s"} loaded.</span>
               <button
@@ -259,8 +197,33 @@ export default function CompanyTemplateLibrary({ templates, onTemplatesLoaded, o
                 Close Preview
               </button>
             </div>
+          }
+        >
+          <div className="p-4 overflow-y-auto bg-slate-50/50">
+            <div className="border border-slate-200 rounded-lg overflow-hidden bg-white shadow-xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[9px] font-bold text-slate-500 uppercase tracking-wide border-b border-slate-200">
+                    <th className="px-3 py-2">Company</th>
+                    <th className="px-3 py-2">Sub-brand</th>
+                    <th className="px-3 py-2">Department</th>
+                    <th className="px-3 py-2">Template Preview</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-[10px] text-slate-700">
+                  {templates.map((t) => (
+                    <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
+                      <td className="px-3 py-2.5 font-bold text-slate-900">{t.company}</td>
+                      <td className="px-3 py-2.5 text-slate-600">{t.subBrand || "-"}</td>
+                      <td className="px-3 py-2.5 text-violet-700 font-medium">{t.department || "-"}</td>
+                      <td className="px-3 py-2.5 text-slate-500 max-w-xs truncate" title={t.template}>{t.template}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
+        </ConfigModal>
       )}
     </div>
   );
