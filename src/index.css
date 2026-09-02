@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+html {
+  font-size: 125% !important; /* Globally scales all REM-based typography by 25% */
+}
+
+/* animate-fadeIn utility – used throughout the app for smooth mount transitions */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out both;
+}
+
+body {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+  color: #1e293b !important; /* Dark slate text for high contrast in light theme */
+}
+
+/* Light cyan page background gradient */
+.light-cyan-bg {
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%) !important;
+}
+
+/* Premium Light Cards with Slate borders and dark text */
+.dark-card {
+  background-color: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #1e293b !important;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* Premium Light Black Card */
+.dark-card-black {
+  background-color: #f8fafc !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 15px rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Make sure text fields and textareas inside dark cards are highly readable in light theme */
+.dark-card input, 
+.dark-card textarea, 
+.dark-card select,
+.dark-card-black input,
+.dark-card-black textarea,
+.dark-card-black select {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+.dark-card input:focus, 
+.dark-card textarea:focus, 
+.dark-card select:focus,
+.dark-card-black input:focus,
+.dark-card-black textarea:focus,
+.dark-card-black select:focus {
+  border-color: #0ea5e9 !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2) !important;
+}
+
+/* Custom button animations with high contrast light-theme styling */
+.btn-animate {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-animate:hover {
+  transform: translateY(-1.5px) scale(1.02) !important;
+  box-shadow: 0 4px 12px rgba(14, 165, 233, 0.25) !important;
+}
+
+.btn-animate:active {
+  transform: translateY(0) scale(0.98) !important;
+}
+
+/* Header brand styles */
+.border-brand-border {
+  border-color: #1e293b !important;
+}
+
+/* Helper dynamic styles adjusted for light theme compatibility */
+.border-brand-cyan {
+  border-color: #0284c7 !important; /* Sky blue */
+}
+
+.bg-brand-cyan {
+  background-color: #0284c7 !important;
+  color: #ffffff !important;
+}
+
+.text-brand-cyan {
+  color: #0284c7 !important;
+}
+
+.text-brand-sky {
+  color: #0ea5e9 !important;
+}

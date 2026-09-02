@@ -1,0 +1,19 @@
+# Databricks Apps configuration.
+#
+# Databricks Apps' built-in run templates (Streamlit/Dash/Flask/Gradio) target Python; this is a
+# Node.js/Express app, so it uses the "custom command" form instead. The command below installs
+# Node + Python dependencies, builds the production bundle, and starts the server, all in the
+# app's container — there's no separate build step in Databricks Apps for Node projects, so this
+# does it inline. `pip install` pulls in sentence-transformers/rank-bm25/numpy for the RAG matching
+# worker (match_projects.py) — the knowledge base's embeddings themselves are NOT rebuilt here;
+# they're precomputed offline via `python build_knowledge_base.py` and committed to
+# assets/knowledge_base_vectordb.{npy,json} before you deploy (see README.md).
+#
+# Databricks Apps injects the port to listen on via $PORT (see server.ts) and $DATABRICKS_APP_URL
+# for the app's public URL — set APP_URL to that value below once you know it, or wire it up as an
+# app resource / env var in the Databricks UI.
+command: ["bash", "-c", "pip install -r requirements.txt && npm ci && npm run build && npm start"]
+
+env:
+  - name: "NODE_ENV"
+    value: "production"

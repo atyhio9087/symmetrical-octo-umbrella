@@ -1,0 +1,10 @@
+Company,Sub-brand,Department,Template
+generic,,,"Open with a warm but professional greeting using the stakeholder's first name.
+
+Keep each paragraph to 2-3 sentences. Lead with the single most relevant metric before any other detail.
+
+Close with a soft, low-pressure call to action and a simple sign-off (""Best regards,"")."
+Nordholm Freight,,Analytics,"Nordholm Freight's Analytics team prefers a direct, data-first tone.
+
+Open with ""Hi [Name],"" reference a specific KPI in the first sentence, and close with ""Talk soon,"" rather than a formal sign-off."
+Nordholm Freight,,Data Engineering,"Nordholm Freight's Data Engineering team prefers more technical language — mention the specific architecture or pipeline pattern used (e.g. streaming vs. batch) before discussing business impact. Close with ""Best,""."

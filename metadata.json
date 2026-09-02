@@ -1,0 +1,6 @@
+{
+  "name": "Cold Outreach Generator",
+  "description": "A web-based tool for analytics service providers to ingest project databases, define prompt configurations, match stakeholder focus to relevant projects, and generate highly personalized cold outreach email blurbs in single and batch modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

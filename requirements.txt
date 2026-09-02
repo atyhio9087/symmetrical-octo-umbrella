@@ -1,0 +1,6 @@
+sentence-transformers>=2.7.0
+rank-bm25>=0.2.2
+numpy>=1.26.0
+# Only needed to run build_knowledge_base.py against a .xlsx file — not required by the deployed
+# app itself (match_projects.py never reads Excel directly).
+openpyxl>=3.1.0
